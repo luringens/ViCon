@@ -1,104 +1,90 @@
-// ImGui - standalone example application for DirectX 11
-// If you are new to ImGui, see examples/README.txt and documentation at the top of imgui.cpp.
+#include <imgui/imgui.h>
+#include "imgui_impl_glfw_gl3.h"
+#include <stdio.h>
+#include "gl3w/gl3w.h"
+#include "glfw/glfw3.h"
+#include "escapi/escapi.h"
+#include <iostream>
+#include <basetsd.h>
+#include "gl3w/glcorearb.h"
 
-#include "imgui/imgui.h"
-#include "imgui_impl_dx11.h"
-#include <d3d11.h>
-#define DIRECTINPUT_VERSION 0x0800
-#include <tchar.h>
-#include "setupdx.h"
-
-
-extern LRESULT ImGui_ImplDX11_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+static void error_callback(int error, const char* description)
 {
-    if (ImGui_ImplDX11_WndProcHandler(hWnd, msg, wParam, lParam))
-        return true;
-
-    switch (msg)
-    {
-    case WM_SIZE:
-        if (g_pd3dDevice != nullptr && wParam != SIZE_MINIMIZED)
-        {
-            ImGui_ImplDX11_InvalidateDeviceObjects();
-            CleanupRenderTarget();
-            g_pSwapChain->ResizeBuffers(0, static_cast<UINT>(LOWORD(lParam)), static_cast<UINT>(HIWORD(lParam)), DXGI_FORMAT_UNKNOWN, 0);
-            CreateRenderTarget();
-            ImGui_ImplDX11_CreateDeviceObjects();
-        }
-        return 0;
-    case WM_SYSCOMMAND:
-        if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
-            return 0;
-        break;
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        return 0;
-	default:
-    	break;
-    }
-    return DefWindowProc(hWnd, msg, wParam, lParam);
+    fprintf(stderr, "Error %d: %s\n", error, description);
 }
 
 int main(int, char**)
 {
-    // Create application window
-    WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, LoadCursor(nullptr, IDC_ARROW), nullptr, nullptr, _T("ImGui Example"), nullptr };
-    RegisterClassEx(&wc);
-    HWND hwnd = CreateWindow(_T("ImGui Example"), _T("ImGui DirectX11 Example"), WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, wc.hInstance, NULL);
-
-    // Initialize Direct3D
-    if (CreateDeviceD3D(hwnd) < 0)
-    {
-        CleanupDeviceD3D();
-        UnregisterClass(_T("ImGui Example"), wc.hInstance);
+    // Setup window
+    glfwSetErrorCallback(error_callback);
+    if (!glfwInit())
         return 1;
-    }
-
-    // Show the window
-    ShowWindow(hwnd, SW_SHOWDEFAULT);
-    UpdateWindow(hwnd);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	GLFWwindow* window = glfwCreateWindow(1280, 720, "ViCon", nullptr, nullptr);
+    glfwMakeContextCurrent(window);
+    gl3wInit();
 
     // Setup ImGui binding
-    ImGui_ImplDX11_Init(hwnd, g_pd3dDevice, g_pd3dDeviceContext);
+    ImGui_ImplGlfwGL3_Init(window, true);
 
-    // Load Fonts
-    // (there is a default font, this is only if you want to change it. see extra_fonts/README.txt for more details)
-    //ImGuiIO& io = ImGui::GetIO();
-    //io.Fonts->AddFontDefault();
-    //io.Fonts->AddFontFromFileTTF("../../extra_fonts/Cousine-Regular.ttf", 15.0f);
-    //io.Fonts->AddFontFromFileTTF("../../extra_fonts/DroidSans.ttf", 16.0f);
-    //io.Fonts->AddFontFromFileTTF("../../extra_fonts/ProggyClean.ttf", 13.0f);
-    //io.Fonts->AddFontFromFileTTF("../../extra_fonts/ProggyTiny.ttf", 10.0f);
-    //io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesJapanese());
+    // Setup ESCAPI
+	auto devices = setupESCAPI();
+	if (devices == 0)
+	{
+		std::cout << "\nNo devices found!" << std::endl;
+		return-1;
+	}
 
-    bool show_test_window = true;
-    bool show_another_window = false;
-    ImVec4 clear_col = ImColor(114, 144, 154);
+	auto devicenr = 1;
+
+	struct SimpleCapParams capture;
+	capture.mWidth = 320;
+	capture.mHeight = 240;
+	capture.mTargetBuf = new INT32[320 * 240 * sizeof(INT32)];
+
+	if (initCapture(devicenr, &capture) == 0)
+	{
+		std::cout << "\nThe device may already be in use!" << std::endl;
+		return-1;
+	}
+	
+	doCapture(devicenr);
+
+	while (isCaptureDone(devicenr) == 0) { /* Wait for first frame */ }
+
+	auto show_test_window = true;
+	auto show_another_window = false;
+    ImVec4 clear_color = ImColor(114, 144, 154);
 
     // Main loop
-    MSG msg;
-    ZeroMemory(&msg, sizeof(msg));
-    while (msg.message != WM_QUIT)
+    while (!glfwWindowShouldClose(window))
     {
-        if (PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-            continue;
-        }
-        ImGui_ImplDX11_NewFrame();
+        glfwPollEvents();
+        ImGui_ImplGlfwGL3_NewFrame();
 
         // 1. Show a simple window
         // Tip: if we don't call ImGui::Begin()/ImGui::End() the widgets appears in a window automatically called "Debug"
         {
-            static float f = 0.0f;
+            static auto f = 0.0f;
             ImGui::Text("Hello, world!");
             ImGui::SliderFloat("float", &f, 0.0f, 1.0f);
-            ImGui::ColorEdit3("clear color", reinterpret_cast<float*>(&clear_col));
+            ImGui::ColorEdit3("clear color", reinterpret_cast<float*>(&clear_color));
             if (ImGui::Button("Test Window")) show_test_window ^= 1;
             if (ImGui::Button("Another Window")) show_another_window ^= 1;
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+
+			if (isCaptureDone(devicenr) == 1) doCapture(devicenr);
+			
+			GLuint id;
+			glGenTextures(1, &id);
+			glBindTexture(GL_TEXTURE_2D, id);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, capture.mWidth, capture.mHeight, 0,
+				                           GL_RGBA, GL_UNSIGNED_INT, capture.mTargetBuf);
+			glBindTexture(GL_TEXTURE_2D, 0);
+
+			ImGui::Image(reinterpret_cast<GLuint*>(id), ImVec2(capture.mWidth, capture.mHeight));	        
         }
 
         // 2. Show another simple window, this time using an explicit Begin/End pair
@@ -113,19 +99,23 @@ int main(int, char**)
         // 3. Show the ImGui test window. Most of the sample code is in ImGui::ShowTestWindow()
         if (show_test_window)
         {
-            ImGui::SetNextWindowPos(ImVec2(650, 20), ImGuiSetCond_FirstUseEver);     // Normally user code doesn't need/want to call it because positions are saved in .ini file anyway. Here we just want to make the demo initial state a bit more friendly!
+            ImGui::SetNextWindowPos(ImVec2(650, 20), ImGuiSetCond_FirstUseEver);
             ImGui::ShowTestWindow(&show_test_window);
         }
 
         // Rendering
-        g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, reinterpret_cast<float*>(&clear_col));
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+        glClear(GL_COLOR_BUFFER_BIT);
         ImGui::Render();
-        g_pSwapChain->Present(0, 0);
+        glfwSwapBuffers(window);
     }
 
-    ImGui_ImplDX11_Shutdown();
-    CleanupDeviceD3D();
-    UnregisterClass(_T("ImGui Example"), wc.hInstance);
+    // Cleanup
+    ImGui_ImplGlfwGL3_Shutdown();
+    glfwTerminate();
 
     return 0;
 }
