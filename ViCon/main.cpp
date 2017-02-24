@@ -19,9 +19,9 @@ bool SetupEscapi(SimpleCapParams&, GLuint&, int);
 void CreateDebugdataWindow(int, ImVec4&, int, float*, int);
 void CreateWebcamWindow(GLuint, int, int);
 
-int main(int, char**)
+int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-    // Setup window
+	// Setup window
     glfwSetErrorCallback(error_callback);
     if (!glfwInit())
         return 1;
@@ -53,6 +53,9 @@ int main(int, char**)
 	auto framesum = 0;
 	auto framesumcount = 0;
 	auto lastFrameNote = time;
+
+	// Remove console
+	FreeConsole();
 	
     // Main loop
 	while (!glfwWindowShouldClose(window))
