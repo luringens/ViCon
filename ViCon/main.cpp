@@ -5,8 +5,10 @@
 #include "glfw/glfw3.h"
 #include "escapi/escapi.h"
 #include <iostream>
-#include <basetsd.h>
 #include "gl3w/glcorearb.h"
+#include <chrono>
+
+using namespace std::chrono;
 
 static void error_callback(int error, const char* description)
 {
@@ -33,84 +35,122 @@ int main(int, char**)
 	auto devices = setupESCAPI();
 	if (devices == 0)
 	{
-		std::cout << "\nNo devices found!" << std::endl;
+		std::cout << "ESCAPI initialization failure or no devices found." << std::endl;
 		return-1;
 	}
-
 	auto devicenr = 1;
-
 	struct SimpleCapParams capture;
-	capture.mWidth = 320;
-	capture.mHeight = 240;
-	capture.mTargetBuf = new INT32[320 * 240 * sizeof(INT32)];
-
+	capture.mWidth = 256;
+	capture.mHeight = 256;
+	capture.mTargetBuf = new int[256 * 256];
+	GLuint texture;
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); // Linear Filtering
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); // Linear Filtering
 	if (initCapture(devicenr, &capture) == 0)
 	{
-		std::cout << "\nThe device may already be in use!" << std::endl;
+		std::cout << "ESCAPI: The device may already be in use!" << std::endl;
 		return-1;
 	}
-	
 	doCapture(devicenr);
-
 	while (isCaptureDone(devicenr) == 0) { /* Wait for first frame */ }
 
-	auto show_test_window = true;
-	auto show_another_window = false;
-    ImVec4 clear_color = ImColor(114, 144, 154);
+	// Setup GUI variables
+	ImVec4 clear_color = ImColor(114, 144, 154);
 
+	// Setup frametiming
+	int time = system_clock::now().time_since_epoch().count() / 1000;
+
+	// Setup frameratecounter
+	auto frametimesCount = 20;
+	auto frametimes = new float[frametimesCount];
+	auto framesum = 0;
+	auto framesumcount = 0;
+	auto lastFrameNote = time;
+	
     // Main loop
-    while (!glfwWindowShouldClose(window))
-    {
-        glfwPollEvents();
-        ImGui_ImplGlfwGL3_NewFrame();
+	while (!glfwWindowShouldClose(window))
+	{
+		// Calculate time data
+		int newtime = system_clock::now().time_since_epoch().count()/1000;
+		auto deltatime = newtime - time;
+		auto framerate = ImGui::GetIO().Framerate;
 
-        // 1. Show a simple window
-        // Tip: if we don't call ImGui::Begin()/ImGui::End() the widgets appears in a window automatically called "Debug"
+		// Poll events, start new frame 
+		glfwPollEvents();
+		ImGui_ImplGlfwGL3_NewFrame();
+
+		// Set framerate data
+		framesum += framerate;
+		framesumcount++;
+		if (newtime - lastFrameNote > 1000 && framesumcount > 0) {
+			for (auto i = 0; i < frametimesCount-1; i++)
+				frametimes[i] = frametimes[i + 1];
+			frametimes[frametimesCount-1] = framesum / framesumcount;
+			lastFrameNote = newtime;
+			framesum = 0;
+			framesumcount = 0;
+		}
+
+		// Get frame size
+		int display_w, display_h;
+		glfwGetFramebufferSize(window, &display_w, &display_h);
+
+        // Debug data window
         {
+			ImGui::SetNextWindowPos(ImVec2(0, 0));
+			ImGui::SetNextWindowSize(ImVec2(400, display_h), ImGuiSetCond_Always);
+			ImGui::Begin("Debug data", nullptr, ImGuiWindowFlags_NoMove |
+											    ImGuiWindowFlags_NoResize |
+				                                ImGuiWindowFlags_NoCollapse |
+											    ImGuiWindowFlags_NoBringToFrontOnFocus);
+			
             static auto f = 0.0f;
             ImGui::Text("Hello, world!");
             ImGui::SliderFloat("float", &f, 0.0f, 1.0f);
             ImGui::ColorEdit3("clear color", reinterpret_cast<float*>(&clear_color));
-            if (ImGui::Button("Test Window")) show_test_window ^= 1;
-            if (ImGui::Button("Another Window")) show_another_window ^= 1;
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-
-			if (isCaptureDone(devicenr) == 1) doCapture(devicenr);
+            
+			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / framerate, framerate);
 			
-			GLuint id;
-			glGenTextures(1, &id);
-			glBindTexture(GL_TEXTURE_2D, id);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, capture.mWidth, capture.mHeight, 0,
-				                           GL_RGBA, GL_UNSIGNED_INT, capture.mTargetBuf);
-			glBindTexture(GL_TEXTURE_2D, 0);
+			ImGui::PlotHistogram("Frametimes", frametimes, frametimesCount, 0, 0, 
+				FLT_MAX, FLT_MAX, ImVec2(300, 50));
+			ImGui::End();
+		}
 
-			ImGui::Image(reinterpret_cast<GLuint*>(id), ImVec2(capture.mWidth, capture.mHeight));	        
-        }
-
-        // 2. Show another simple window, this time using an explicit Begin/End pair
-        if (show_another_window)
+        // Webcam window
         {
-            ImGui::SetNextWindowSize(ImVec2(200,100), ImGuiSetCond_FirstUseEver);
-            ImGui::Begin("Another Window", &show_another_window);
-            ImGui::Text("Hello");
+            ImGui::SetNextWindowSize(ImVec2(400, 400), ImGuiSetCond_Always);
+            ImGui::Begin("Webcam live feed");
+            
+			if (isCaptureDone(devicenr) == 1) {
+				for (auto i = 0; i < 256 * 256; i++)
+					capture.mTargetBuf[i] = capture.mTargetBuf[i] & 0xff00ff00 |
+					(capture.mTargetBuf[i] & 0xff) << 16 |
+					(capture.mTargetBuf[i] & 0xff0000) >> 16 |
+					(0xff000000);
+
+				glBindTexture(GL_TEXTURE_2D, texture);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, capture.mWidth, capture.mHeight,
+					0, GL_RGBA, GL_UNSIGNED_BYTE, static_cast<GLvoid*>(capture.mTargetBuf));
+
+				doCapture(devicenr);
+			}
+
+			ImVec2 picsize(capture.mWidth, capture.mHeight);
+			ImGui::Image(reinterpret_cast<ImTextureID>(texture), picsize);
+
             ImGui::End();
         }
 
-        // 3. Show the ImGui test window. Most of the sample code is in ImGui::ShowTestWindow()
-        if (show_test_window)
-        {
-            ImGui::SetNextWindowPos(ImVec2(650, 20), ImGuiSetCond_FirstUseEver);
-            ImGui::ShowTestWindow(&show_test_window);
-        }
-
         // Rendering
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui::Render();
         glfwSwapBuffers(window);
+
+		time = newtime;
     }
 
     // Cleanup
