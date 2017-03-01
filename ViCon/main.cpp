@@ -1,4 +1,4 @@
-#include <imgui/imgui.h>
+#include "imgui/imgui.h"
 #include "imgui_impl_glfw_gl3.h"
 #include <stdio.h>
 #include "gl3w/gl3w.h"
@@ -26,8 +26,11 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 {
 	// Setup window
     glfwSetErrorCallback(error_callback);
-    if (!glfwInit())
-        return 1;
+    if (!glfwInit()) {
+		std::cerr << "Failed to initialize glfw" << std::endl;
+		return 1;
+    }
+        
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -40,11 +43,16 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 
     // Setup ESCAPI
 	struct SimpleCapParams capture;
-	capture.mHeight = 640;
-	capture.mWidth  = 800;
-	auto devicenr = 1;
+	capture.mWidth = 640;
+	capture.mHeight = 480;
+	capture.mTargetBuf = new int[capture.mWidth * capture.mHeight * sizeof(int)];
+	auto devicenr = 0;
 	ImageContainer rawWebcamContainer(capture.mWidth, capture.mHeight);
-    SetupEscapi(capture, rawWebcamContainer.GetTexture(), devicenr);
+	auto tex = rawWebcamContainer.GetTexture();
+    if (!SetupEscapi(capture, tex, devicenr)) {
+		std::cerr << "Failed to setup ESCAPI" << std::endl;
+		return 1;
+    }
     
 	// Setup GUI variables
 	ImVec4 clear_color = ImColor(114, 144, 154);
@@ -59,13 +67,10 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 	auto framesumcount = 0;
 	auto lastFrameNote = time;
 
-	// Remove console
-	FreeConsole();
-
 	// Setup networking
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-		std::cout << "WSAStartup failed." << std::endl;
+		std::cerr << "WSAStartup failed." << std::endl;
 		return 1;
 	}
 
@@ -75,6 +80,9 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 	sender.Send(message, strlen(message));
 	auto package = receiver.Receive();
 	delete[] package;
+
+	// Remove console
+	FreeConsole();
 	
     // Main loop
 	while (!glfwWindowShouldClose(window))
@@ -102,17 +110,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 
 		// Get next webcam frame if ready
 		if (isCaptureDone(devicenr) == 1) {
-			// Swap red and blue to convert from BGRA to RGBA
-			for (auto i = 0; i < capture.mWidth * capture.mHeight; i++)
-				capture.mTargetBuf[i] = capture.mTargetBuf[i] & 0xff00ff00 |
-				(capture.mTargetBuf[i] & 0xff) << 16 |
-				(capture.mTargetBuf[i] & 0xff0000) >> 16 |
-				0xff000000; // And set alpha to 255 to make it opaque
-
-			glBindTexture(GL_TEXTURE_2D, rawWebcamTexture);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, capture.mWidth, capture.mHeight,
-				0, GL_RGBA, GL_UNSIGNED_BYTE, static_cast<GLvoid*>(capture.mTargetBuf));
-
+			rawWebcamContainer.SetBgraBuffer(capture.mTargetBuf, capture.mHeight, capture.mHeight);
 			doCapture(devicenr);
 		}
 
@@ -124,7 +122,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 		CreateDebugdataWindow(display_h, clear_color, framerate, frametimes, frametimesCount);
 
         // Webcam window
-		CreateWebcamWindow(rawWebcamTexture, capture.mWidth, capture.mHeight);
+		CreateWebcamWindow(rawWebcamContainer.GetTexture(), capture.mWidth, capture.mHeight);
 
         // Rendering
         glViewport(0, 0, display_w, display_h);
@@ -139,27 +137,19 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     // Cleanup
     ImGui_ImplGlfwGL3_Shutdown();
     glfwTerminate();
+	delete[] capture.mTargetBuf;
 
     return 0;
 }
 
 bool SetupEscapi(SimpleCapParams &capture, GLuint &texture, int devicenr)
 {
-	capture.mWidth = 500;
-	capture.mHeight = 500;
-	capture.mTargetBuf = new int[capture.mWidth * capture.mHeight];
-
 	auto devices = setupESCAPI();
 	if (devices == 0)
 	{
 		std::cout << "ESCAPI initialization failure or no devices found." << std::endl;
 		return false;
 	}
-	
-	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); // Linear Filtering
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); // Linear Filtering
 	
 	if (initCapture(devicenr, &capture) == 0) {
 		std::cout << "ESCAPI: The device may already be in use!" << std::endl;

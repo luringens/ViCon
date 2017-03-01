@@ -10,7 +10,8 @@ public:
 	void SetRgbaBuffer(int* newbuffer, int height, int width);
 	void SetBgraBuffer(int* newbuffer, int height, int width);
 
-	GLuint& GetTexture() const { return *texture; }
+	GLuint GetTexture() const { return texture; }
+	GLuint* GetTexturePointer() { return &texture; }
 
 	int Height() const { return height; }
 	int Width()  const { return width;  }
@@ -20,6 +21,8 @@ private:
 	int height;
 	int width;
 	std::vector<int> buffer;
-	GLuint* texture;
+	GLuint texture;
+
+	void CreateTexture();
 };
 
