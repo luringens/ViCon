@@ -7,6 +7,8 @@
 #include <iostream>
 #include "gl3w/glcorearb.h"
 #include <chrono>
+#include "NetworkReceiver.h"
+#include "NetworkSender.h"
 
 using namespace std::chrono;
 
@@ -56,6 +58,18 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 
 	// Remove console
 	FreeConsole();
+
+	// Setup networking
+	WSADATA wsaData;
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		std::cout << "WSAStartup failed." << std::endl;
+		return 1;
+	}
+	NetworkReceiver receiver("666");
+	NetworkSender sender("666", "localhost");
+	sender.Send("Hello, world!");
+	auto package = receiver.Receive();
+	delete[] package;
 	
     // Main loop
 	while (!glfwWindowShouldClose(window))
