@@ -6,7 +6,7 @@ class NetworkSender
 public:
 	NetworkSender(const char* port, const char* host);
 
-	void Send(char* data) const;
+	void Send(char* data, int length) const;
 
 	~NetworkSender();
 

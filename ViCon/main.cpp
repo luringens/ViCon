@@ -65,9 +65,11 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 		std::cout << "WSAStartup failed." << std::endl;
 		return 1;
 	}
+
+	char* message = "Hello, world!";
 	NetworkReceiver receiver("666");
 	NetworkSender sender("666", "localhost");
-	sender.Send("Hello, world!");
+	sender.Send(message, strlen(message));
 	auto package = receiver.Receive();
 	delete[] package;
 	

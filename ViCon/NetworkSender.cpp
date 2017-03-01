@@ -31,14 +31,18 @@ NetworkSender::NetworkSender(const char* port, const char* host)
 	}
 }
 
-void NetworkSender::Send(char* data) const
+void NetworkSender::Send(char* data, int length) const
 {
-	auto numbytes = sendto(mySocket, data, strlen(data), 0, 
-		servinfo->ai_addr, servinfo->ai_addrlen);
-	if (numbytes == -1)
+	auto total = 0;        // how many bytes we've sent
+	auto bytesleft = length; // how many we have left to send
+	
+	while (total < length)
 	{
-		std::cerr << "sendto err";
-		throw;
+		auto numbytes = sendto(mySocket, data+total, bytesleft, 0,
+			servinfo->ai_addr, servinfo->ai_addrlen);
+		if (numbytes == -1) break;
+		total     += numbytes;
+		bytesleft -= numbytes;
 	}
 }
 
