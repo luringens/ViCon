@@ -1,0 +1,65 @@
+#Core
+Show more debug video. Scale slider for size.
+Stats (pr. macroblock state)
+
+Divide into 16px macroblocks
+Store "transmitted image" as a buffer
+Make another debug video feed, where each macroblock is white square, intensity based on difference from transmit to current.
+
+Sliders for:
+error threshold before retransmit
+Quality (compression)
+Flat bias
+
+Stats for
+Update size graph (hwo big are the blocks)
+Packet loss
+In/out network speed
+
+##Multithread
+Make networking async
+Swap image buffers? Store data in network class?
+Encoding is heavy - parallelize into queues to send.
+
+#Compression
+Use Discrete Cosine Transform and Inverse ^ to compress image.
+This is basically JPEG.
+Work with Quantization.
+
+LATER
+YUV and Chroma subsampling
+
+EVEN LATER
+Entropy coding with 'RANS
+
+#Block format
+##Initial
+1 bit - is there another block update? if false, stop processing.
+4 bits - compression type (raw, zip, lzo, dct).
+6 bits - only present for zip/dct, indicating quality level.
+6 bits - macroblock x index
+6 bits - macroblock y index
+10 bits - size of compressed data
+size * 8 bits - output from the compression algorithm
+33 bit overhead pr macroblock
+
+##Flat
+6 bits - red   color quantized by 4
+6 bits - green color quantized by 4
+6 bits - blue  color quantized by 4
+
+##Network
+Remember state of each block sent
+Mark state as unknown
+Have a callback indicating whether lost or success
+If later packets are success, ignore loss
+
+###Discovery
+-Direct IP
+-Network discovery (broadcast)
+-Master server with client list
+
+###Simulation
+-Latency
+-Packet loss
+Add sliders.
