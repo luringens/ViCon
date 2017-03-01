@@ -9,6 +9,7 @@
 #include <chrono>
 #include "NetworkReceiver.h"
 #include "NetworkSender.h"
+#include "ImageContainer.h"
 
 using namespace std::chrono;
 
@@ -38,11 +39,13 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     ImGui_ImplGlfwGL3_Init(window, true);
 
     // Setup ESCAPI
-	GLuint texture;
 	struct SimpleCapParams capture;
+	capture.mHeight = 640;
+	capture.mWidth  = 800;
 	auto devicenr = 1;
-	SetupEscapi(capture, texture, devicenr);
-
+	ImageContainer rawWebcamContainer(capture.mWidth, capture.mHeight);
+    SetupEscapi(capture, rawWebcamContainer.GetTexture(), devicenr);
+    
 	// Setup GUI variables
 	ImVec4 clear_color = ImColor(114, 144, 154);
 
@@ -50,8 +53,8 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 	int time = system_clock::now().time_since_epoch().count() / 1000;
 
 	// Setup frameratecounter
-	auto frametimesCount = 20;
-	auto frametimes = new float[frametimesCount];
+	const auto frametimesCount = 20;
+	float frametimes[frametimesCount];
 	auto framesum = 0;
 	auto framesumcount = 0;
 	auto lastFrameNote = time;
@@ -106,7 +109,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 				(capture.mTargetBuf[i] & 0xff0000) >> 16 |
 				0xff000000; // And set alpha to 255 to make it opaque
 
-			glBindTexture(GL_TEXTURE_2D, texture);
+			glBindTexture(GL_TEXTURE_2D, rawWebcamTexture);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, capture.mWidth, capture.mHeight,
 				0, GL_RGBA, GL_UNSIGNED_BYTE, static_cast<GLvoid*>(capture.mTargetBuf));
 
@@ -121,7 +124,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 		CreateDebugdataWindow(display_h, clear_color, framerate, frametimes, frametimesCount);
 
         // Webcam window
-		CreateWebcamWindow(texture, capture.mWidth, capture.mHeight);
+		CreateWebcamWindow(rawWebcamTexture, capture.mWidth, capture.mHeight);
 
         // Rendering
         glViewport(0, 0, display_w, display_h);

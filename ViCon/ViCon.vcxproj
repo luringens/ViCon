@@ -95,6 +95,7 @@
   <ItemGroup>
     <ClCompile Include="escapi\escapi.cpp" />
     <ClCompile Include="gl3w\gl3w.c" />
+    <ClCompile Include="ImageContainer.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imgui_demo.cpp" />
     <ClCompile Include="imgui\imgui_draw.cpp" />
@@ -107,6 +108,7 @@
     <ClInclude Include="escapi\escapi.h" />
     <ClInclude Include="gl3w\gl3w.h" />
     <ClInclude Include="gl3w\glcorearb.h" />
+    <ClInclude Include="ImageContainer.h" />
     <ClInclude Include="imgui\imconfig.h" />
     <ClInclude Include="imgui\imgui.h" />
     <ClInclude Include="imgui\imgui_internal.h" />
